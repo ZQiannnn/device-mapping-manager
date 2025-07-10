@@ -4,7 +4,7 @@ FROM golang:1.19
 
 ENV DEBIAN_FRONTEND noninteractive
 
-WORKDIR /go/src/github.com/allfro/device-volume-driver
+WORKDIR /go/src/github.com/ZQiannnn/device-volume-manager
 
 COPY . .
 
