@@ -103,8 +103,27 @@ func listenForMounts() {
 						msg.Actor.ID, info.State.Pid, mount.Source, mount.Destination,
 					)
 
-					if !strings.HasPrefix(mount.Source, "/dev") {
-						log.Printf("%s is not a device... skipping\n", mount.Source)
+					realSource := mount.Source
+
+					// 检查是否是 Docker bind volume
+					if strings.HasPrefix(mount.Source, "/var/lib/docker/volumes/") && strings.HasSuffix(mount.Source, "/_data") {
+						// 解析 volume 名字
+						parts := strings.Split(mount.Source, "/")
+						if len(parts) >= 5 {
+							volumeName := parts[4]
+							// 读取 volume 的 mountpoint
+							volume, err := cli.VolumeInspect(ctx, volumeName)
+							if err == nil {
+								// 如果是 bind mount，device 字段就是真实路径
+								if device, ok := volume.Options["device"]; ok {
+									realSource = device
+								}
+							}
+						}
+					}
+
+					if !strings.HasPrefix(realSource, "/dev") {
+						log.Printf("%s is not a device... skipping\n", realSource)
 						continue
 					}
 
@@ -120,12 +139,12 @@ func listenForMounts() {
 
 					log.Printf("The cgroup path for process %d is at %v\n", pid, cgroupPath)
 
-					if fileInfo, err := os.Stat(mount.Source); err != nil {
+					if fileInfo, err := os.Stat(realSource); err != nil {
 						log.Println(err)
 						continue
 					} else {
 						if fileInfo.IsDir() {
-							err := filepath.Walk(mount.Source,
+							err := filepath.Walk(realSource,
 								func(path string, info os.FileInfo, err error) error {
 									if err != nil {
 										return err
@@ -140,7 +159,7 @@ func listenForMounts() {
 								log.Println(err)
 							}
 						} else {
-							if err = applyDeviceRules(api, mount.Source, cgroupPath, pid); err != nil {
+							if err = applyDeviceRules(api, realSource, cgroupPath, pid); err != nil {
 								log.Println(err)
 							}
 						}
